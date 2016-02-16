@@ -123,6 +123,37 @@ class Project(Document):
 			from `tabPurchase Invoice Item` where project_name = %s and docstatus=1""", self.name)
 
 		self.total_purchase_cost = total_purchase_cost and total_purchase_cost[0][0] or 0
+        def custom__validate_for_direct_mail(self):
+                errors=list()
+                if self.is_direct_mail:
+                        errors+=['El proyecto ya es del tipo Correo Directo']
+                if self.ot:
+                        errors+=['Este proyecto ya cuenta con OT']
+                if not self.is_active:
+                        errors+=['El proyecto debe estar activo']
+                if not (self.expected_start_date and self.expected_end_date):
+                        errors+=['El proyecto debe contar con fecha prevista de inicio y termino']
+                if not len(self.get_tasks()):
+                        errors+=['El proyecto debe contar con al menos 1 tarea']
+                if not self.customer:
+                        errors+=['Debe seleccionar Cliente']
+                return errors
+
+        def custom__set_as_direct_mail(self):
+                if self.is_new():
+                        frappe.throw("Antes de realizar esta accion por favor salve el proyecto.")
+                else:
+                        errors=self.custom__validate_for_direct_mail()
+                        if errors:
+                                for e in errors:
+                                        frappe.throw(e);
+                        else:
+                                self.is_direct_mail = True;
+                                ot=frappe.new_doc("Orden de Trabajo")
+                                ot.save()
+                                self.ot=ot.name
+                                self.save()
+                                frappe.msgprint("Se Asigno Orden de Trabajo {0}".format(self.ot))
 
 @frappe.whitelist()
 def get_cost_center_name(project_name):
