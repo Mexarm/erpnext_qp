@@ -118,7 +118,7 @@ erpnext.TransactionController = erpnext.taxes_and_totals.extend({
 
 	setup_sms: function() {
 		var me = this;
-		if(this.frm.doc.docstatus===1 && !in_list(["Lost", "Stopped"], this.frm.doc.status)
+		if(this.frm.doc.docstatus===1 && !in_list(["Lost", "Stopped", "Closed"], this.frm.doc.status)
 			&& this.frm.doctype != "Purchase Invoice") {
 			this.frm.page.add_menu_item(__('Send SMS'), function() { me.send_sms(); });
 		}
@@ -186,7 +186,7 @@ erpnext.TransactionController = erpnext.taxes_and_totals.extend({
 							ignore_pricing_rule: me.frm.doc.ignore_pricing_rule,
 							doctype: me.frm.doc.doctype,
 							name: me.frm.doc.name,
-							project_name: item.project_name || me.frm.doc.project_name,
+							project: item.project || me.frm.doc.project,
 							qty: item.qty
 						}
 					},
@@ -308,7 +308,15 @@ erpnext.TransactionController = erpnext.taxes_and_totals.extend({
 
 		if (this.frm.doc.posting_date) var date = this.frm.doc.posting_date;
 		else var date = this.frm.doc.transaction_date;
-		erpnext.get_fiscal_year(this.frm.doc.company, date, function() { set_party_account(set_pricing); });
+		
+		if (frappe.meta.get_docfield(this.frm.doctype, "shipping_address") && 
+			in_list(['Purchase Order', 'Purchase Receipt', 'Purchase Invoice'], this.frm.doctype)){
+				erpnext.utils.get_shipping_address(this.frm, function(){
+					set_party_account(set_pricing);
+				})
+		}else{
+			set_party_account(set_pricing);
+		}
 
 		if(this.frm.doc.company) {
 			erpnext.last_selected_company = this.frm.doc.company;
@@ -319,8 +327,6 @@ erpnext.TransactionController = erpnext.taxes_and_totals.extend({
 		if (this.frm.doc.transaction_date) {
 			this.frm.transaction_date = this.frm.doc.transaction_date;
 		}
-
-		erpnext.get_fiscal_year(this.frm.doc.company, this.frm.doc.transaction_date);
 	},
 
 	posting_date: function() {
@@ -342,11 +348,8 @@ erpnext.TransactionController = erpnext.taxes_and_totals.extend({
 						if(r.message) {
 							me.frm.set_value("due_date", r.message);
 						}
-						erpnext.get_fiscal_year(me.frm.doc.company, me.frm.doc.posting_date);
 					}
 				})
-			} else {
-				erpnext.get_fiscal_year(me.frm.doc.company, me.frm.doc.posting_date);
 			}
 		}
 	},
@@ -603,6 +606,7 @@ erpnext.TransactionController = erpnext.taxes_and_totals.extend({
 			callback: function(r) {
 				if (!r.exc && r.message) {
 					me._set_values_for_item_list(r.message);
+					if(item) me.set_gross_profit(item);
 					if(calculate_taxes_and_totals) me.calculate_taxes_and_totals();
 				}
 			}
@@ -845,11 +849,11 @@ erpnext.TransactionController = erpnext.taxes_and_totals.extend({
 			return;
 		}
 
-		if(!this.frm.doc.recurring_id) {
-			this.frm.set_value('recurring_id', this.frm.doc.name);
-		}
-
 		if(this.frm.doc.is_recurring) {
+			if(!this.frm.doc.recurring_id) {
+				this.frm.set_value('recurring_id', this.frm.doc.name);
+			}
+			
 			var owner_email = this.frm.doc.owner=="Administrator"
 				? frappe.user_info("Administrator").email
 				: this.frm.doc.owner;
@@ -876,6 +880,13 @@ erpnext.TransactionController = erpnext.taxes_and_totals.extend({
 				refresh_field('to_date');
 			}
 		}
+	},
+	
+	set_gross_profit: function(item) {
+		if (this.frm.doc.doctype == "Sales Order" && item.valuation_rate) {
+			rate = flt(item.rate) * flt(this.frm.doc.conversion_rate || 1);
+			item.gross_profit = flt(((rate - item.valuation_rate) * item.qty), precision("amount", item));
+		}
 	}
 });
 
@@ -888,7 +899,8 @@ frappe.ui.form.on(cur_frm.doctype + " Item", "rate", function(frm, cdt, cdn) {
 	} else {
 		item.discount_percentage = 0.0;
 	}
-
+	
+	cur_frm.cscript.set_gross_profit(item);
 	cur_frm.cscript.calculate_taxes_and_totals();
 })
 

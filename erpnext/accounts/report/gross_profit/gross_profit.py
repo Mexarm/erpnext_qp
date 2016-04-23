@@ -9,7 +9,7 @@ from frappe.utils import flt
 def execute(filters=None):
 	if not filters: filters = frappe._dict()
 	company_currency = frappe.db.get_value("Company", filters.company, "default_currency")
-	
+
 	gross_profit_data = GrossProfitGenerator(filters)
 
 	data = []
@@ -18,8 +18,8 @@ def execute(filters=None):
 	group_wise_columns = frappe._dict({
 		"invoice": ["parent", "customer", "posting_date","item_code", "item_name","item_group", "brand", "description", \
 			"warehouse", "qty", "base_rate", "buying_rate", "base_amount",
-			"buying_amount", "gross_profit", "gross_profit_percent", "project_name"],
-		"item_code": ["item_code", "item_name", "brand", "description", "warehouse", "qty", "base_rate",
+			"buying_amount", "gross_profit", "gross_profit_percent", "project"],
+		"item_code": ["item_code", "item_name", "brand", "description", "qty", "base_rate",
 			"buying_rate", "base_amount", "buying_amount", "gross_profit", "gross_profit_percent"],
 		"warehouse": ["warehouse", "qty", "base_rate", "buying_rate", "base_amount", "buying_amount",
 			"gross_profit", "gross_profit_percent"],
@@ -35,7 +35,7 @@ def execute(filters=None):
 			"gross_profit", "gross_profit_percent"],
 		"sales_person": ["sales_person", "allocated_amount", "qty", "base_rate", "buying_rate", "base_amount", "buying_amount",
 			"gross_profit", "gross_profit_percent"],
-		"project": ["project_name", "base_amount", "buying_amount", "gross_profit", "gross_profit_percent"],
+		"project": ["project", "base_amount", "buying_amount", "gross_profit", "gross_profit_percent"],
 		"territory": ["territory", "base_amount", "buying_amount", "gross_profit", "gross_profit_percent"]
 	})
 
@@ -45,7 +45,7 @@ def execute(filters=None):
 		row = []
 		for col in group_wise_columns.get(scrub(filters.group_by)):
 			row.append(src.get(col))
-			
+
 		row.append(company_currency)
 		data.append(row)
 
@@ -70,7 +70,7 @@ def get_columns(group_wise_columns, filters):
 		"buying_amount": _("Buying Amount") + ":Currency/currency",
 		"gross_profit": _("Gross Profit") + ":Currency/currency",
 		"gross_profit_percent": _("Gross Profit %") + ":Percent",
-		"project_name": _("Project") + ":Link/Project",
+		"project": _("Project") + ":Link/Project",
 		"sales_person": _("Sales person"),
 		"allocated_amount": _("Allocated Amount") + ":Currency/currency",
 		"customer": _("Customer") + ":Link/Customer",
@@ -80,7 +80,7 @@ def get_columns(group_wise_columns, filters):
 
 	for col in group_wise_columns.get(scrub(filters.group_by)):
 		columns.append(column_map.get(col))
-				
+
 	columns.append({
 		"fieldname": "currency",
 		"label" : _("Currency"),
@@ -145,11 +145,11 @@ class GrossProfitGenerator(object):
 			self.data.append(row)
 
 		if self.grouped:
-			self.collapse_group()
+			self.get_average_rate_based_on_group_by()
 		else:
 			self.grouped_data = []
 
-	def collapse_group(self):
+	def get_average_rate_based_on_group_by(self):
 		# sum buying / selling totals for group
 		self.grouped_data = []
 		for key in self.grouped.keys():
@@ -165,6 +165,8 @@ class GrossProfitGenerator(object):
 			new_row.gross_profit_percent = ((new_row.gross_profit / new_row.base_amount) * 100.0) \
 				if new_row.base_amount else 0
 			new_row.buying_rate = (new_row.buying_amount / new_row.qty) \
+				if new_row.qty else 0
+			new_row.base_rate = (new_row.base_amount / new_row.qty) \
 				if new_row.qty else 0
 
 			self.grouped_data.append(new_row)
@@ -233,7 +235,7 @@ class GrossProfitGenerator(object):
 			conditions += " and posting_date <= %(to_date)s"
 
 		self.si_list = frappe.db.sql("""select item.parenttype, item.parent,
-				si.posting_date, si.posting_time, si.project_name, si.update_stock,
+				si.posting_date, si.posting_time, si.project, si.update_stock,
 				si.customer, si.customer_group, si.territory,
 				item.item_code, item.item_name, item.description, item.warehouse,
 				item.item_group, item.brand, item.dn_detail, item.delivery_note,
