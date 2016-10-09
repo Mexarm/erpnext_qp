@@ -5,7 +5,7 @@ from __future__ import unicode_literals
 import frappe
 import frappe.defaults
 from frappe import _
-from frappe.utils import cstr, cint, flt, comma_or, getdate, nowdate
+from frappe.utils import cstr, cint, flt, comma_or, getdate, nowdate, formatdate, format_time
 from erpnext.stock.utils import get_incoming_rate
 from erpnext.stock.stock_ledger import get_previous_sle, NegativeStockError
 from erpnext.stock.get_item_details import get_bin_details, get_default_cost_center, get_conversion_factor
@@ -49,7 +49,7 @@ class StockEntry(StockController):
 		self.validate_batch()
 
 		self.set_actual_qty()
-		self.calculate_rate_and_amount()
+		self.calculate_rate_and_amount(update_finished_item_rate=False)
 
 	def on_submit(self):
 		self.update_stock_ledger()
@@ -70,9 +70,6 @@ class StockEntry(StockController):
 			"Manufacture", "Repack", "Subcontract"]
 		if self.purpose not in valid_purposes:
 			frappe.throw(_("Purpose must be one of {0}").format(comma_or(valid_purposes)))
-
-		if self.purpose in ("Manufacture", "Repack") and not self.difference_account:
-			self.difference_account = frappe.db.get_value("Company", self.company, "default_expense_account")
 
 	def set_transfer_qty(self):
 		for item in self.get("items"):
@@ -96,9 +93,6 @@ class StockEntry(StockController):
 				"cost_center", "conversion_factor"):
 					if f in ["stock_uom", "conversion_factor"] or not item.get(f):
 						item.set(f, item_details.get(f))
-
-			if self.difference_account and not item.expense_account:
-				item.expense_account = self.difference_account
 
 			if not item.transfer_qty and item.qty:
 				item.transfer_qty = item.qty * item.conversion_factor
@@ -178,7 +172,7 @@ class StockEntry(StockController):
 			self.production_order = None
 
 	def check_if_operations_completed(self):
-		"""Check if Time Logs are completed against before manufacturing to capture operating costs."""
+		"""Check if Time Sheets are completed against before manufacturing to capture operating costs."""
 		prod_order = frappe.get_doc("Production Order", self.production_order)
 
 		for d in prod_order.get("operations"):
@@ -225,27 +219,32 @@ class StockEntry(StockController):
 
 			# validate qty during submit
 			if d.docstatus==1 and d.s_warehouse and not allow_negative_stock and d.actual_qty < d.transfer_qty:
-				frappe.throw(_("""Row {0}: Qty not avalable in warehouse {1} on {2} {3}.
-					Available Qty: {4}, Transfer Qty: {5}""").format(d.idx, d.s_warehouse,
-					self.posting_date, self.posting_time, d.actual_qty, d.transfer_qty), NegativeStockError)
+				frappe.throw(_("Row {0}: Qty not available for {4} in warehouse {1} at posting time of the entry ({2} {3})".format(d.idx,
+					frappe.bold(d.s_warehouse), formatdate(self.posting_date),
+					format_time(self.posting_time), frappe.bold(d.item_code)))
+					+ '<br><br>' + _("Available qty is {0}, you need {1}").format(frappe.bold(d.actual_qty),
+						frappe.bold(d.transfer_qty)),
+					NegativeStockError, title=_('Insufficient Stock'))
 
 	def get_stock_and_rate(self):
 		self.set_transfer_qty()
 		self.set_actual_qty()
 		self.calculate_rate_and_amount()
 
-	def calculate_rate_and_amount(self, force=False):
-		self.set_basic_rate(force)
+	def calculate_rate_and_amount(self, force=False, update_finished_item_rate=True):
+		self.set_basic_rate(force, update_finished_item_rate)
 		self.distribute_additional_costs()
 		self.update_valuation_rate()
 		self.set_total_incoming_outgoing_value()
 		self.set_total_amount()
 
-	def set_basic_rate(self, force=False):
+	def set_basic_rate(self, force=False, update_finished_item_rate=True):
 		"""get stock and incoming rate on posting date"""
 		raw_material_cost = 0.0
+		fg_basic_rate = 0.0
 
 		for d in self.get('items'):
+			if d.t_warehouse: fg_basic_rate = flt(d.basic_rate)
 			args = frappe._dict({
 				"item_code": d.item_code,
 				"warehouse": d.s_warehouse or d.t_warehouse,
@@ -266,13 +265,14 @@ class StockEntry(StockController):
 				if not d.t_warehouse:
 					raw_material_cost += flt(d.basic_amount)
 
-		self.set_basic_rate_for_finished_goods(raw_material_cost)
+		number_of_fg_items = len([t.t_warehouse for t in self.get("items") if t.t_warehouse])
+		if (fg_basic_rate == 0.0 and number_of_fg_items == 1) or update_finished_item_rate:
+			self.set_basic_rate_for_finished_goods(raw_material_cost)
 
 	def set_basic_rate_for_finished_goods(self, raw_material_cost):
 		if self.purpose in ["Manufacture", "Repack"]:
-			number_of_fg_items = len([t.t_warehouse for t in self.get("items") if t.t_warehouse])
 			for d in self.get("items"):
-				if d.bom_no or (d.t_warehouse and number_of_fg_items == 1):
+				if d.bom_no or d.t_warehouse:
 					d.basic_rate = flt(raw_material_cost / flt(d.transfer_qty), d.precision("basic_rate"))
 					d.basic_amount = flt(raw_material_cost, d.precision("basic_amount"))
 

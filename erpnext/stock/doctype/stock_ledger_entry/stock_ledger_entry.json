@@ -624,7 +624,7 @@
  "issingle": 0, 
  "istable": 0, 
  "max_attachments": 0, 
- "modified": "2016-05-12 17:41:37.386809", 
+ "modified": "2016-03-29 13:26:08.241138", 
  "modified_by": "Administrator", 
  "module": "Stock", 
  "name": "Stock Ledger Entry", 
@@ -662,7 +662,7 @@
    "if_owner": 0, 
    "import": 0, 
    "permlevel": 0, 
-   "print": 0, 
+   "print": 1, 
    "read": 1, 
    "report": 1, 
    "role": "Stock User", 
@@ -715,5 +715,6 @@
  "read_only": 0, 
  "read_only_onload": 0, 
  "sort_field": "modified", 
- "sort_order": "DESC"
+ "sort_order": "DESC", 
+ "track_seen": 0
 }

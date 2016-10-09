@@ -1,18 +1,21 @@
 {
  "allow_copy": 0, 
  "allow_import": 1, 
- "allow_rename": 0, 
+ "allow_rename": 1, 
  "autoname": "field:uom_name", 
+ "beta": 0, 
  "creation": "2013-01-10 16:34:24", 
  "custom": 0, 
  "docstatus": 0, 
  "doctype": "DocType", 
  "document_type": "Setup", 
+ "editable_grid": 0, 
  "fields": [
   {
    "allow_on_submit": 0, 
    "bold": 0, 
    "collapsible": 0, 
+   "columns": 0, 
    "fieldname": "uom_name", 
    "fieldtype": "Data", 
    "hidden": 0, 
@@ -39,6 +42,7 @@
    "allow_on_submit": 0, 
    "bold": 0, 
    "collapsible": 0, 
+   "columns": 0, 
    "description": "Check this to disallow fractions. (for Nos)", 
    "fieldname": "must_be_whole_number", 
    "fieldtype": "Check", 
@@ -65,13 +69,14 @@
  "hide_toolbar": 0, 
  "icon": "icon-compass", 
  "idx": 1, 
+ "image_view": 0, 
  "in_create": 0, 
  "in_dialog": 0, 
  "is_submittable": 0, 
  "issingle": 0, 
  "istable": 0, 
  "max_attachments": 0, 
- "modified": "2016-05-12 13:35:00.102475", 
+ "modified": "2016-09-23 17:58:21.574996", 
  "modified_by": "Administrator", 
  "module": "Setup", 
  "name": "UOM", 
@@ -178,6 +183,9 @@
    "write": 0
   }
  ], 
+ "quick_entry": 1, 
  "read_only": 0, 
- "read_only_onload": 0
+ "read_only_onload": 0, 
+ "sort_order": "ASC", 
+ "track_seen": 0
 }

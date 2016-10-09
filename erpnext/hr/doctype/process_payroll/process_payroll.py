@@ -15,19 +15,17 @@ class ProcessPayroll(Document):
 			Returns list of active employees based on selected criteria
 			and for which salary structure exists
 		"""
-
 		cond = self.get_filter_condition()
 		cond += self.get_joining_releiving_condition()
 
 		emp_list = frappe.db.sql("""
 			select t1.name
 			from `tabEmployee` t1, `tabSalary Structure` t2
-			where t1.docstatus!=2 and t2.docstatus != 2
-			and t1.name = t2.employee
+			where t1.docstatus!=2 and t2.docstatus != 2 and 
+			ifnull(t2.salary_slip_based_on_timesheet,0) = 0 and t1.name = t2.employee
 		%s """% cond)
 
 		return emp_list
-
 
 	def get_filter_condition(self):
 		self.check_mandatory()
@@ -59,6 +57,8 @@ class ProcessPayroll(Document):
 			Creates salary slip for selected employees if already not created
 		"""
 
+		self.check_permission('write')
+
 		emp_list = self.get_emp_list()
 		ss_list = []
 		for emp in emp_list:
@@ -67,10 +67,10 @@ class ProcessPayroll(Document):
 					""", (emp[0], self.month, self.fiscal_year, self.company)):
 				ss = frappe.get_doc({
 					"doctype": "Salary Slip",
+					"salary_slip_based_on_timesheet": 0,
 					"fiscal_year": self.fiscal_year,
 					"employee": emp[0],
 					"month": self.month,
-					"email_check": self.send_email,
 					"company": self.company,
 				})
 				ss.insert()
@@ -104,12 +104,13 @@ class ProcessPayroll(Document):
 		"""
 			Submit all salary slips based on selected criteria
 		"""
+		self.check_permission('write')
+
 		ss_list = self.get_sal_slip_list()
 		not_submitted_ss = []
 		for ss in ss_list:
 			ss_obj = frappe.get_doc("Salary Slip",ss[0])
 			try:
-				ss_obj.email_check = self.send_email
 				ss_obj.submit()
 			except Exception,e:
 				not_submitted_ss.append(ss[0])
@@ -128,11 +129,9 @@ class ProcessPayroll(Document):
 
 		submitted_ss = self.format_as_links(list(set(all_ss) - set(not_submitted_ss)))
 		if submitted_ss:
-			mail_sent_msg = self.send_email and " (Mail has been sent to the employee)" or ""
 			log = """
-			<b>Salary Slips Submitted %s:</b>\
-			<br><br> %s <br><br>
-			""" % (mail_sent_msg, '<br>'.join(submitted_ss))
+				<b>Salary Slips Submitted:</b> <br><br>%s
+				""" % ('<br>'.join(submitted_ss))
 
 		if not_submitted_ss:
 			log += """
@@ -164,6 +163,8 @@ class ProcessPayroll(Document):
 
 
 	def make_journal_entry(self, salary_account = None):
+		self.check_permission('write')
+
 		amount = self.get_total_salary()
 		default_bank_account = frappe.db.get_value("Company", self.company,
 			"default_bank_account")
