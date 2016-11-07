@@ -2,27 +2,13 @@
 // License: GNU General Public License v3. See license.txt
 
 erpnext.taxes_and_totals = erpnext.payments.extend({
-	setup: function() {
-		if(this.frm.get_field('taxes')) {
-			this.frm.get_field('taxes').grid.editable_fields = [
-				{fieldname: 'charge_type', columns: 2},
-				{fieldname: 'account_head', columns: 2},
-				{fieldname: 'rate', columns: 2},
-				{fieldname: 'tax_amount', columns: 2},
-				{fieldname: 'total', columns: 2}
-			];
-		}
-
-	},
+	setup: function() {},
 	apply_pricing_rule_on_item: function(item){
-		if(!item.margin_type){
-			item.margin_rate_or_amount = 0.0;
-		}
-
 		if(item.margin_type == "Percentage"){
-			item.total_margin = item.price_list_rate + item.price_list_rate * ( item.margin_rate_or_amount / 100);
+			item.total_margin = flt(item.price_list_rate) 
+				+ flt(item.price_list_rate) * ( flt(item.margin_rate_or_amount) / 100);
 		}else{
-			item.total_margin = item.price_list_rate + item.margin_rate_or_amount;
+			item.total_margin = flt(item.price_list_rate) + flt(item.margin_rate_or_amount);
 		}
 
 		item.rate = flt(item.total_margin , precision("rate", item));
